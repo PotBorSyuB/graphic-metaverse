@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title> 시어핀스키 카펫</title>
+    </head>
+    <body>
+        <label>
+            반복횟수:
+            <input id="depth" type="number" min="0" max="16" step="1" value="0">
+            <span id="depthValue">0</span>
+        </label>
+        <label>
+            색:
+            <input id="color" type="color" value="#ffffff">
+        </label>
+        <br><br>
+        <canvas id="screen" width="600" height="600"></canvas>
+
+        <script>
+            const canvas = document.querySelector("#screen");
+            const gl = canvas.getContext("webgl2");
+            const depthInput = document.querySelector("#depth");
+            const depthValue = document.querySelector("#depthValue");
+            const colorInput = document.querySelector("#color");
+            if (!gl) {
+                throw new Error("WebGL 2를 사용할 수 없습니다.");
+            }
+
+            const vertexSource = `#version 300 es
+                in vec2 position;
+
+            void main() {
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+            `;
+
+            const fragmentSource = `#version 300 es
+                precision mediump float;
+
+                uniform vec4 shapeColor;
+                out vec4 color;
+
+                void main() {
+                    color = shapeColor;
+                }
+            `;
+
+            function makeShader(type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    throw new Error(gl.getShaderInfoLog(shader));
+                }
+                return shader;
+            }
+
+            const program = gl.createProgram();
+            gl.attachShader(program, makeShader(gl.VERTEX_SHADER, vertexSource));
+            gl.attachShader(program, makeShader(gl.FRAGMENT_SHADER, fragmentSource));
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                throw new Error(gl.getProgramInfoLog(program));
+            }
+            gl.useProgram(program);
+
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+
+            const position = gl.getAttribLocation(program, "position");
+            gl.enableVertexAttribArray(position);
+            gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+            const shapeColor = gl.getUniformLocation(program, "shapeColor");
+
+            function addRectangle(x, y, size, depth, vertices){
+                if(depth == 0){
+                    vertices.push(
+                    x, y + size,
+                    x + size, y + size,
+                    x, y,
+
+                    x, y,
+                    x + size, y + size,
+                    x + size, y
+                    )
+                return;
+                };
+
+                const small = size / 3;
+
+                for(let row = 0; row < 3; row++){
+                    for(let col = 0; col < 3; col++){
+                        if(row == 1 && col == 1) continue;
+
+                        addRectangle(
+                            x + col * small,
+                            y + row * small,
+                            small,
+                            depth - 1,
+                            vertices
+                        );
+                    }
+                }
+            }
+
+            function draw() {
+                const depth = Number(depthInput.value);
+                depthValue.textContent = depth;
+
+                const vertices = [];
+                addRectangle(
+                    -0.8,
+                    -0.8,
+                    1.6,
+                    depth,
+                    vertices
+                );
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.bufferData(
+                    gl.ARRAY_BUFFER,
+                    new Float32Array(vertices),
+                    gl.DYNAMIC_DRAW
+                );
+
+                const hex = colorInput.value;
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                gl.uniform4f(shapeColor, r, g, b, 1);
+
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0.08, 0.08, 0.12, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
+            }
+
+            depthInput.addEventListener("input", draw);
+            colorInput.addEventListener("input", draw);
+            draw();
+        </script>
+    </body>
+</html>
